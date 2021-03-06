@@ -17,6 +17,7 @@ include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/websocketpp
   ${CMAKE_CURRENT_SOURCE_DIR}/websocketpp/websocketpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/nlohmann
 )
 
 link_libraries(pthread

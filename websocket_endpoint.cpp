@@ -1,11 +1,12 @@
 /*
  * @Author: Dongying
  * @Date: 2021-03-04 11:03:54
- * @LastEditTime: 2021-03-04 11:19:32
+ * @LastEditTime: 2021-03-06 18:25:37
  * @LastEditors: Please set LastEditors
  * @Description: 0.1
  * @FilePath: /WebSocket2/websocket_endpoint.cpp
  */
+
 #include <websocketpp/config/asio_no_tls_client.hpp>
 #include <websocketpp/client.hpp>
  
@@ -61,13 +62,15 @@ namespace MySocket
 				<< "), close reason: " << con->get_remote_close_reason();
 			m_error_reason = s.str();
 		}
- 
+		// 获取收到的信息
 		void on_message(websocketpp::connection_hdl, ws_client::message_ptr msg) {
 			if (msg->get_opcode() == websocketpp::frame::opcode::text) {
-				m_messages.push_back("<< " + msg->get_payload());
+				// m_messages.push_back("<< " + msg->get_payload());
+				m_messages.push_back(msg->get_payload());
 			}
 			else {
-				m_messages.push_back("<< " + websocketpp::utility::to_hex(msg->get_payload()));
+				// m_messages.push_back("<< " + websocketpp::utility::to_hex(msg->get_payload()));
+				m_messages.push_back(websocketpp::utility::to_hex(msg->get_payload()));
 			}
 		}
  
@@ -84,16 +87,23 @@ namespace MySocket
 		}
  
 		void record_sent_message(std::string message) {
-			m_messages.push_back(">> " + message);
+			// m_messages.push_back(">> " + message);
+			m_messages.push_back(message);
 		}
  
 		friend std::ostream & operator<< (std::ostream & out, connection_metadata const & data);
+
+		std::vector<std::string> GetMessage()
+		{
+			return m_messages;
+		}
 	private:
 		websocketpp::connection_hdl m_hdl;
 		std::string m_status;
 		std::string m_uri;
 		std::string m_server;
 		std::string m_error_reason;
+		// 发送的消息不存，只存接受到的消息
 		std::vector<std::string> m_messages;
 	};
  
@@ -108,10 +118,10 @@ namespace MySocket
 		for (it = data.m_messages.begin(); it != data.m_messages.end(); ++it) {
 			out << *it << "\n";
 		}
- 
+		
 		return out;
 	}
- 
+
 	ws_client g_wsEndPoint;
 	connection_metadata::ptr g_wsClientConnection;
  
@@ -180,6 +190,8 @@ namespace MySocket
 			));
  
 		g_wsEndPoint.connect(pConnection);
+
+		std::cout << "Websocket连接成功" << std::endl;
  
 		return 0;
 	}
@@ -202,20 +214,108 @@ namespace MySocket
 		}
 	}	
  
-	void websocket_endpoint::send(std::string message) {
+	void websocket_endpoint::send(float posi_one, float posi_two, int id_one, int id_two) {
 		websocketpp::lib::error_code ec;
+
+		// 按照此格式可以解析
+		json j1={
+				{"position",{
+						{{"id",id_one},
+						{"position",posi_one}},
+						{{"id",id_two},
+						{"position",posi_two}}
+					}
+				}
+				};
+				std::string j1_string = j1.dump();
+		json j=
+		{
+			{"type","crane_info"},
+			{"data",j1_string
+		}
+		};
+		std::cout << std::setw(4) << j << std::endl;
+		std::string j_string = j.dump();
+
+		// std::string first = " ";
+		// std::string a1 = "{\"type\":\"crane_info\",\"data\":";
+		// std::string a2 = "\"";
+		// std::string a3 = "{\\\"position\\\":[{\\\"position\\\":";
+		// std::string a5 = ",\\\"id\\\":";
+		// std::string a7 = "},{\\\"position\\\":";
+		// std::string a9 = ",\\\"id\\\":";
+		// std::string a11 = "}]}\"}";
+		// std::string end = "";
+		// std::string out = first + a1 + a2 + a3 + std::to_string(position3) + a5 + std::to_string(id3) + a7 + std::to_string(position4) + a9 + std::to_string(id4) + a11 + end;
  
-		g_wsEndPoint.send(g_wsClientConnection->get_hdl(), message, websocketpp::frame::opcode::text, ec);
+		g_wsEndPoint.send(g_wsClientConnection->get_hdl(), j_string, websocketpp::frame::opcode::text, ec);
 		if (ec) {
 			std::cout << "> Error sending message: " << ec.message() << std::endl;
 			return;
 		}
- 
-		g_wsClientConnection->record_sent_message(message);
+		
+		// g_wsClientConnection->record_sent_message(j_string);
 	}	
  
+	
+	
 	void websocket_endpoint::show()
 	{
 		std::cout << * g_wsClientConnection << std::endl;
+	}
+
+	std::string websocket_endpoint::parsing()
+	{	
+		int cnt =0;
+		if (!(g_wsClientConnection->get_status()=="Open"))
+		{
+			cnt++;
+			std::cout << "-----------------" << cnt << std::endl;
+		}
+		
+		// 从服务器端接受到的信息存储在向量容器中
+		std::vector<std::string> messages;
+		messages = g_wsClientConnection->GetMessage();
+		std::cout << "messages size:   " << messages.size() << std::endl;
+		
+		std::vector<std::string>::const_iterator it;
+		std::string test_str;
+		for (it = messages.begin(); it != messages.end(); ++it) {
+			std::string j2 = *it;
+			auto j3 = json::parse(j2);
+			// 可以通过这种方式获取json字符串中的数据，可以读取对应id及视频码流地址的字符串等
+			int test_n = j3["crane_data"][0]["type_id"];
+			std::cout << "----------------------------------------------------------" << std::endl;
+			std::cout << "----------------------------" << test_n << "------------------------------" << std::endl;
+			std::cout << "----------------------------------------------------------" << std::endl;
+
+			test_str = j3["crane_data"][0]["video_urls"][0];
+			std::cout << "----------------------------------------------------------" << std::endl;
+			std::cout << "----------------------------" << test_str << "------------------------------" << std::endl;
+			std::cout << "----------------------------------------------------------" << std::endl;
+
+			// 对j3输出后就是json字符串的格式，显示比较明显
+			std::cout << std::setw(4) << j3 << std::endl;
+			// for (auto& el : j3.items()) {
+			// 	// if (el.key() == "crane_data" )
+			// 	// {
+			// 	// 	json j5 = el.value();
+			// 	// 	std::string test_str;
+    		// 	// 	test_str = j5.dump();
+			// 	// 	json j = test_str;
+			// 	// 	auto j4 = json::parse(std::string(j));
+			// 	// 	std::cout << el.key() << ":" << std::endl;
+			// 	// 	for (auto& el : j4.items()) {
+			// 	// 		std::cout << el.key() << " : " << el.value() << "\n";
+			// 	// 	}
+			// 	// 	continue;
+			// 	// 	// json j2 = el;
+			// 	// 	// auto j4 = json::parse(el);
+			// 	// 	// std::cout << el.key() << " : " << j4.value() << "\n";
+			// 	// }
+			// 	std::cout << el.key() << " : " << el.value() << "\n";
+			// }
+		}
+		return test_str;
 	}
 }
